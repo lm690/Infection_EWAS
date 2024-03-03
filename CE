@@ -1,0 +1,232 @@
+#########################################################################################
+################ ROSMAP snRNAseq Processing for EWCE analysis ###########################
+#########################################################################################
+
+#Scripts in this file pertain to the loading, filtering and analysis of the ROSMAP scRNA 
+#sequencing data from PFC run through 10X single nucleus RNA seq. This dataset is publically 
+#available from synapse and previously published here:
+
+#	https://www.nature.com/articles/s41586-019-1195-2
+
+#########################################################################################
+################ LIBRARY ###################################################
+#########################################################################################
+
+if (!requireNamespace("DropletUtils", quietly = TRUE))
+  BiocManager::install("DropletUtils", dependencies  =T)
+if (!requireNamespace("EWCE", quietly = TRUE))
+  BiocManager::install("EWCE")
+if (!requireNamespace("ewceData", quietly = TRUE))
+  BiocManager::install("ewceData")
+if (!requireNamespace("SingleCellExperiment", quietly = TRUE))
+  BiocManager::install("SingleCellExperiment")
+if (!requireNamespace("Seurat", quietly = TRUE))
+  BiocManager::install("Seurat")
+if (!requireNamespace("cowplot", quietly = TRUE))
+  BiocManager::install("cowplot")
+if (!requireNamespace("som", quietly = TRUE))
+  BiocManager::install("som")
+if (!requireNamespace("biomaRt", quietly = TRUE))
+  BiocManager::install("biomaRt")
+if (!requireNamespace("missMethyl", quietly = TRUE))
+  BiocManager::install("missMethyl")
+
+library(DropletUtils)
+library(EWCE)
+library(ewceData)
+library(SingleCellExperiment)
+library(Seurat)
+library(ggplot2)
+library(RColorBrewer)
+library(cowplot)
+library(som)
+library(biomaRt)
+library(ggpubr)
+library(missMethyl)
+
+#########################################################################################
+################ FUNCTION ###############################################################
+#########################################################################################
+
+calculateAnnotation1 <- function(ctd, targetGenes,title){
+  unconditional_results <- EWCE::bootstrap_enrichment_test(
+    sct_data = ctd,
+    hits = targetGenes,
+    sctSpecies = "human",
+    genelistSpecies = "human",
+    geneSizeControl = T,
+    reps = 10000,
+    annotLevel = 1, no_cores = 1)
+  
+  Res1 <- unconditional_results$results
+  Res1 <- Res1[-(which(colnames(Res1)=="CellType"))]
+  cell_df <- data.frame(row.names=c("Oli","Opc","Per","End","Mic","Ast","In","Ex"),
+                        CellType = c("Oligodendrocytes","OPC","Pericytes","Endothelia","Microglia","Astrocytes","Inhibitory Neurons","Excitatory Neurons"))
+  Res1 <- merge(Res1, cell_df, by="row.names")
+  
+  Res1[which(Res1$sd_from_mean < 0),"sd_from_mean"] <- 0
+  
+  Res1[which(Res1$q < 0.001),"sig"] <- "***"
+  Res1[which(Res1$q < 0.01 & Res1$q > 0.001),"sig"] <- "**"
+  Res1[which(Res1$q < 0.05 & Res1$q > 0.01),"sig"] <- "*"
+  Res1[which(Res1$q > 0.05),"sig"] <- ""
+  
+  rosmapBroad <- ggplot(Res1, aes(x = as.factor(CellType), y = abs(sd_from_mean)))+
+    geom_bar(stat = "identity", color = "black",lwd = 1)+
+    geom_text(aes(label = sig, x = as.factor(CellType), y = sd_from_mean +0.05), size = 10)+
+    scale_fill_distiller(direction = -1)+
+    ylab("SD from mean")+
+    theme_cowplot()+ 
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+    xlab(NULL)+
+    ggtitle(title)
+  
+  
+  return(list(unconditional_results, rosmapBroad))
+}
+
+calculateAnnotation2 <- function(ctd, targetGenes){
+  unconditional_results2 <- EWCE::bootstrap_enrichment_test(
+    sct_data = ctd,
+    hits = targetGenes,
+    sctSpecies = "human",
+    genelistSpecies = "human",
+    reps = 10000,
+    annotLevel = 2, no_cores = 1)
+  
+  ann2_plot <- EWCE::ewce_plot(unconditional_results2$results, 
+                               mtc_method = "BH")
+  
+  return(list(unconditional_results2,ann2_plot))
+}
+
+convertToSymbol <- function(targetList){
+  targetList <- getBM(attributes=c('hgnc_symbol', 'ensembl_gene_id_version'),filters = 'ensembl_gene_id_version',
+                      values = targetList, mart = ensembl)
+  
+  targetList <- targetList[-which(targetList$hgnc_symbol==""),]
+  return(targetList)
+}
+
+MouseDatasetControl <- function(targetGenes){
+  MouseCTD <- ewceData::ctd()
+  unconditional_results_Mouse <- EWCE::bootstrap_enrichment_test(
+    sct_data = MouseCTD,
+    hits = targetGenes,
+    sctSpecies = "mouse",
+    genelistSpecies = "human",
+    reps = 10000,
+    annotLevel = 1, no_cores = 1)
+  
+  ResMice <- unconditional_results_Mouse$results
+  #ResMice$CellType <-  c("Oligodendrocytes","Endothelial/Mural","Microglia","Pyr CA1 Neurons","Astrocytes/ependymal","Pyr SS Neurons","Interneurons")
+  
+  ResMice[which(ResMice$sd_from_mean < 0),"sd_from_mean"] <- 0
+  
+  miceBroad <- ggplot(ResMice, aes(x = as.factor(CellType), y = abs(sd_from_mean), fill = q))+
+    geom_bar(stat = "identity", color = "black",lwd = 1)+
+    scale_fill_distiller(direction = -1,palette = 2)+
+    ylab("SD from mean")+
+    theme_cowplot()+ 
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+    xlab(NULL)+
+    labs(fill = "FDR q value")+
+    ggtitle("Mouse Cortex")
+  
+  #pdf("BroadRes_RNA.pdf",width = 12, height = 8)
+  return(miceBroad)
+  
+  #dev.off()
+}
+
+########################################################################################
+########################################## MAIN ########################################
+########################################################################################
+
+
+################ Load and check miRNA hits ##############################################
+
+setwd("C:/Users/lm690/OneDrive - University of Exeter/Documents/R/Infection")
+#D:\OneDrive - University of Exeter\Documents\R
+
+ensembl = useEnsembl(biomart="ensembl", dataset="hsapiens_gene_ensembl",version=109)
+
+load("ctd_scROS.rda")
+
+Inf<-read.csv("out.csv",row.names=1)
+map<-getMappedEntrezIDs(rownames(Inf))
+sig<-map$sig.eg
+
+Inf_Genes <- getBM(attributes=c('hgnc_symbol', 'entrezgene_id'),filters = 'entrezgene_id',
+                   values = sig, mart = ensembl)
+
+##### METHYLATION #####
+### MODEL ###
+
+results_ann1Inf <- calculateAnnotation1(ctd,Inf_Genes$hgnc_symbol,"Inf")
+
+results_ann2Inf <- calculateAnnotation2(ctd,Inf_Genes$hgnc_symbol)
+
+### WGCNA ###
+
+targetListmagenta <- read.csv("magenta.csv",
+                                 row.names = 1)
+
+results_ann1magenta <- calculateAnnotation1(ctd,targetListmagenta$hgnc_symbol,"magenta")
+results_ann2magenta <- calculateAnnotation2(ctd,targetListmagenta$hgnc_symbol)
+
+targetListdarkorange <- read.csv("darkorange.csv",
+                                    row.names = 1)
+
+results_ann1darkorange <- calculateAnnotation1(ctd,targetListdarkorange$hgnc_symbol,"darkorange")
+results_ann2darkorange <- calculateAnnotation2(ctd,targetListdarkorange$hgnc_symbol)
+
+targetListorange <- read.csv("orange.csv",
+                            row.names = 1)
+
+results_ann1orange <- calculateAnnotation1(ctd,targetListorange$hgnc_symbol,"orange")
+results_ann2orange <- calculateAnnotation2(ctd,targetListorange$hgnc_symbol)
+
+
+targetListred <- read.csv("red.csv",
+                               row.names = 1)
+
+results_ann1red <- calculateAnnotation1(ctd,targetListred$hgnc_symbol,"red")
+results_ann2red <- calculateAnnotation2(ctd,targetListred$hgnc_symbol)
+
+targetListpink <- read.csv("pink.csv",
+                               row.names = 1)
+
+results_ann1pink <- calculateAnnotation1(ctd,targetListpink$hgnc_symbol,"pink")
+results_ann2pink <- calculateAnnotation2(ctd,targetListpink$hgnc_symbol)
+
+## Respiratory ##
+load("ctd_scROS.rda")
+
+Resp<-read.csv("out.csv",row.names=1)
+map<-getMappedEntrezIDs(rownames(Resp))
+sig<-map$sig.eg
+
+Resp_Genes <- getBM(attributes=c('hgnc_symbol', 'entrezgene_id'),filters = 'entrezgene_id',
+                   values = sig, mart = ensembl)
+
+##### METHYLATION #####
+### MODEL ###
+
+results_ann1Resp <- calculateAnnotation1(ctd,Resp_Genes$hgnc_symbol,"Resp")
+
+results_ann2Resp <- calculateAnnotation2(ctd,Resp_Genes$hgnc_symbol)
+
+
+pdf("CE_Inf.pdf")
+results_ann1Inf
+results_ann2Inf
+results_ann1magenta
+results_ann2magenta
+results_ann1darkorange
+results_ann2darkorange
+results_ann1orange
+results_ann2orange
+results_ann1Resp
+results_ann2Resp
+dev.off()
