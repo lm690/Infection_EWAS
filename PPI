@@ -1,0 +1,147 @@
+if (!requireNamespace("rbioapi", quietly = TRUE))
+  BiocManager::install("rbioapi")
+if (!requireNamespace("biomaRt", quietly = TRUE))
+  BiocManager::install("biomaRt")
+if (!requireNamespace("missMethyl", quietly = TRUE))
+  BiocManager::install("missMethyl")
+library(missMethyl)
+library(biomaRt)
+library(rbioapi)
+
+setwd("C:/Users/lm690/OneDrive - University of Exeter/Documents/R/Infection")
+#D:\OneDrive - University of Exeter\Documents\R\Infection
+#C:\Users\lm690\OneDrive - University of Exeter\Documents\R\Infection
+
+##################
+##### DMPs #####
+##################
+
+load("Int_GO.R")
+
+map<-getMappedEntrezIDs(Inf)
+sig<-map$sig.eg
+
+ensembl = useEnsembl(biomart="ensembl", dataset="hsapiens_gene_ensembl")
+
+listFilters(ensembl)
+
+proteins_cell_wgcna_inf <- getBM(attributes=c('hgnc_symbol', 'entrezgene_id'),filters = 'entrezgene_id',
+                                     values = sig, mart = ensembl)
+write.csv(proteins_cell_wgcna_inf,file="cpg.csv")
+
+wgcna_network_cell_inf <- rba_string_interactions_network(ids = proteins_cell_wgcna_inf$hgnc_symbol,
+                                                              species = 9606,
+                                                              required_score = 700,
+                                                              network_type = "functional")
+#700 required score indicates relative confidence but not super stringent
+
+no_dup_wgcna_network_cell_inf  <- wgcna_network_cell_violet[!duplicated(wgcna_network_cell_inf ),]
+write.table(no_dup_wgcna_network_cell_inf , "wgcna_network_cell_cpg.txt", quote = F, sep = "\t", row.names = F)
+
+
+##################
+##### orange #####
+##################
+
+load("GO Gene Analysis Output WGCNA orange Filtered.Rdata")
+load("MEorange.RData")
+
+map<-getMappedEntrezIDs(MEorange)
+sig<-map$sig.eg
+
+ensembl = useEnsembl(biomart="ensembl", dataset="hsapiens_gene_ensembl")
+
+listFilters(ensembl)
+
+proteins_cell_wgcna_orange <- getBM(attributes=c('hgnc_symbol', 'entrezgene_id'),filters = 'entrezgene_id',
+                                    values = sig, mart = ensembl)
+write.csv(proteins_cell_wgcna_orange,file="orange.csv")
+
+wgcna_network_cell_orange <- rba_string_interactions_network(ids = proteins_cell_wgcna_orange$hgnc_symbol,
+                                                             species = 9606,
+                                                             required_score = 700,
+                                                             network_type = "functional")
+#700 required score indicates relative confidence but not super stringent
+
+no_dup_wgcna_network_cell_orange  <- wgcna_network_cell_orange[!duplicated(wgcna_network_cell_orange ),]
+write.table(no_dup_wgcna_network_cell_orange , "wgcna_network_cell_orange.txt", quote = F, sep = "\t", row.names = F)
+
+######################
+##### magenta #####
+######################
+
+load("GO Gene Analysis Output WGCNA magenta Filtered.Rdata")
+load("MEmagenta.RData")
+
+map<-getMappedEntrezIDs(MEmagenta)
+sig<-map$sig.eg
+
+ensembl = useEnsembl(biomart="ensembl", dataset="hsapiens_gene_ensembl")
+
+listFilters(ensembl)
+
+proteins_cell_wgcna_magenta <- getBM(attributes=c('hgnc_symbol', 'entrezgene_id'),filters = 'entrezgene_id',
+                                        values = sig, mart = ensembl)
+write.csv(proteins_cell_wgcna_magenta,file="magenta.csv")
+
+wgcna_network_cell_magenta <- rba_string_interactions_network(ids = proteins_cell_wgcna_magenta$hgnc_symbol,
+                                                                 species = 9606,
+                                                                 required_score = 700,
+                                                                 network_type = "functional")
+#700 required score indicates relative confidence but not super stringent
+
+no_dup_wgcna_network_cell_magenta  <- wgcna_network_cell_magenta[!duplicated(wgcna_network_cell_magenta ),]
+write.table(no_dup_wgcna_network_cell_magenta , "wgcna_network_cell_magenta.txt", quote = F, sep = "\t", row.names = F)
+
+##################
+##### darkorange #####
+##################
+
+load("GO Gene Analysis Output WGCNA darkorange Filtedarkorange.Rdata")
+load("MEdarkorange.RData")
+
+map<-getMappedEntrezIDs(MEdarkorange)
+sig<-map$sig.eg
+
+ensembl = useEnsembl(biomart="ensembl", dataset="hsapiens_gene_ensembl")
+
+listFilters(ensembl)
+
+proteins_cell_wgcna_darkorange <- getBM(attributes=c('hgnc_symbol', 'entrezgene_id'),filters = 'entrezgene_id',
+                                 values = sig, mart = ensembl)
+write.csv(proteins_cell_wgcna_darkorange,file="darkorange.csv")
+
+wgcna_network_cell_darkorange <- rba_string_interactions_network(ids = proteins_cell_wgcna_darkorange$hgnc_symbol,
+                                                          species = 9606,
+                                                          requidarkorange_score = 700,
+                                                          network_type = "functional")
+#700 requidarkorange score indicates relative confidence but not super stringent
+
+no_dup_wgcna_network_cell_darkorange  <- wgcna_network_cell_darkorange[!duplicated(wgcna_network_cell_darkorange ),]
+write.table(no_dup_wgcna_network_cell_darkorange , "wgcna_network_cell_darkorange.txt", quote = F, sep = "\t", row.names = F)
+
+##################
+##### Resp #####
+##################
+
+load("Resp_GO.R")
+
+map<-getMappedEntrezIDs(resp)
+sig<-map$sig.eg
+
+ensembl = useEnsembl(biomart="ensembl", dataset="hsapiens_gene_ensembl")
+
+listFilters(ensembl)
+
+proteins_cell_wgcna_resp <- getBM(attributes=c('hgnc_symbol', 'entrezgene_id'),filters = 'entrezgene_id',
+                                     values = sig, mart = ensembl)
+write.csv(proteins_cell_wgcna_resp,file="resp.csv")
+
+wgcna_network_cell_resp <- rba_string_interactions_network(ids = proteins_cell_wgcna_resp$hgnc_symbol,
+                                                              species = 9606,
+                                                              required_score = 700,
+                                                              network_type = "functional")
+#700 required score indicates relative confidence but not super stringent
+
+no_dup_wgcna_network_cell_resp  <- wgcna_network_cell_violet[!duplicated(wgcna_network_cell_resp ),]
+write.table(no_dup_wgcna_network_cell_resp , "wgcna_network_cell_resp.txt", quote = F, sep = "\t", row.names = F)
